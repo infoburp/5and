@@ -7,7 +7,8 @@ Nondefault.net */
 
 
 /*** Particle processing/types ***/
-var AIR=0, SAND=1, WATER=2;
+var AIR=0, SAND=1, WATER=2, WALL=3, STEAM=4;
+var eStrings = ["Air","Sand","Water","Wall","Steam"];
 var props = {};
 props[AIR] = {
 	ignore: true,
@@ -16,7 +17,7 @@ props[AIR] = {
 props[SAND] = {
 	ignore: false,
 	color: [255,235,20],
-	gravity: 1,
+	gravity: 2,
 	slippery: 1,
 	jitter: 0
 };
@@ -27,7 +28,18 @@ props[WATER] = {
 	slippery: 2,
 	jitter: 1
 };
-
+props[WALL] = {
+	ignore: true,
+	color: [100,100,100]
+};
+props[STEAM] = {
+	ignore: false,
+	color: [200,200,200],
+	gravity: -1,
+	slippery: 2,
+	jitter: 1,
+	decaychance: 0.05
+};
 
 /*** Particle management ***/
 var gw = 200;
@@ -47,7 +59,7 @@ function np(x,y) {
 	npi(gpi(x,y));
 }
 function npi(i) { //make a new particle at index
-	particles[i] = new Uint8Array(3);
+	particles[i] = []//new Uint8Array(3);
 	particles[i][0] = AIR; //material
 	particles[i][1] = 0; //has been processed
 }
@@ -105,8 +117,9 @@ function simuStep() {
 				var yy = y;
 				
 				var moveddown = false;
-				for (var gr=pp.gravity; gr>0; gr--) {
-					try {
+				var ig = pp.gravity<0?1:-1;
+				for (var gr=pp.gravity; gr!=0; gr+=ig) {
+					//try {
 						if (yy+gr<gh && free(x,y+gr)) { //apply gravity
 							var yyy = yy+gr;
 							mpt(xx,yy,xx,yyy);
@@ -114,12 +127,12 @@ function simuStep() {
 							moveddown = true;
 							break;
 						}
-					}
-					catch (e) {console.log(y+gr+" "+gh)};
+					//}
+					//catch (e) {console.log(y+gr+" "+gh)};
 				}
 				
 				if (!moveddown) {
-					if (free(xx-1,yy+1) && free(xx+1,yy+1)) {
+					/*if (free(xx-1,yy+1) && free(xx+1,yy+1)) {
 						var r = fastRand()>0.5?1:-1;
 						mpt(xx,yy,xx+r,yy+1);
 						xx+=r;
@@ -134,8 +147,17 @@ function simuStep() {
 						mpt(xx,yy,xx+1,yy+1);
 						xx++;
 						yy++;
+					}*/
+					var d = fastRand()>0.5?1:-1;
+					if (free(xx+d,yy+1)) {
+						mpt(xx,yy,xx+d,yy+1);
+						xx = xx+d;
 					}
-				}
+					else if (free(xx-d,yy+1)) {
+						mpt(xx,yy,xx-d,yy+1);
+						xx = xx-d;
+					}
+				}  
 				
 				if (pp.jitter>0) {
 					var xm = Math.ceil(fastRand()*pp.jitter)*fastRand()>0.5?1:-1;
@@ -144,6 +166,8 @@ function simuStep() {
 						xx = xx+xm;
 					}
 				}
+				
+				if (pp.decaychance && fastRand()<pp.decaychance) {np(xx,yy);}
 			}
 		}
 	}
@@ -156,11 +180,19 @@ function simuStep() {
 /*** Document functions ***/
 var intv;
 var canvas,bcanvas,ctx,bctx,cw,ch;
-var mouseX=0, mouseY=0, mouseD=false, sz=3;
+var mouseX=0, mouseY=0, mouseD=false;
+var brushElement=SAND, brushSize=2;
+
+var tooltip = "Welcome to 5and!", tttimeout=1500, ttt = Date.now();
+function showTooltip() {ttt = Date.now();}
+
 function load() {
 	//set up output canvas
 	canvas = ge("output");
 	ctx = canvas.getContext("2d");
+	ctx.webkitImageSmoothingEnabled = false;
+	ctx.mozImageSmoothingEnabled = false;
+	ctx.imageSmoothingEnabled = false;	
 	cw = canvas.width;
 	ch = canvas.height;
 	
@@ -176,6 +208,7 @@ function load() {
 	ge("output").addEventListener("mousemove",eMm,false);
 	ge("output").addEventListener("mousedown",eMd,false);
 	ge("output").addEventListener("mouseup",eMu,false);
+	ge("output").addEventListener("mousewheel",eMw,false);
 }
 
 function eMm(event) {
@@ -201,6 +234,18 @@ function eMu(event) {
 	drawParticles(tx,ty,mouseX,mouseY);
 }
 
+function eMw(event) {
+	event.preventDefault();
+	var delta=event.detail? event.detail*(-120) : event.wheelDelta;
+	
+	var d=0;
+	if (delta>0) {d=1} else {d=-1;}
+	
+	brushElement = brushElement+d>=eStrings.length?0:brushElement+d<0?eStrings.length-1:brushElement+d;
+	tooltip = eStrings[brushElement];
+	showTooltip();
+}
+
 function setmp(event) {
 	mouseX = Math.floor((event.pageX-ge("output").offsetLeft)*(gw/cw));
 	mouseY = Math.floor((event.pageY-ge("output").offsetTop)*(gh/ch));
@@ -209,11 +254,11 @@ function setmp(event) {
 function drawParticles(x1,y1,x2,y2) {
 	if (mouseD) {
 		doLine(x1,y1,x2,y2, function(x,y){
-			for (var xx=x-sz; xx<x+sz; xx++) {
-				for (var yy=y-sz; yy<y+sz; yy++) {
+			for (var xx=x-brushSize; xx<x+brushSize; xx++) {
+				for (var yy=y-brushSize; yy<y+brushSize; yy++) {
 					if (inbounds(xx,yy)) {
 						np(xx,yy);
-						spp(xx,yy,0,SAND);
+						spp(xx,yy,0,brushElement);
 					}
 				}
 			}
@@ -236,6 +281,10 @@ function redraw() {
 		}
 	}
 	bctx.putImageData(imgdata,0,0);
+	
+	bctx.fillStyle = "rgba(255,255,255,"+(1-((Date.now()-ttt)/tttimeout))+")";
+	bctx.fillText(tooltip,mouseX+10,mouseY+10);
+	
 	ctx.drawImage(bcanvas,0,0,cw,ch);
 }
 
