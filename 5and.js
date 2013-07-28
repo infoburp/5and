@@ -156,6 +156,7 @@ function simuStep() {
 /*** Document functions ***/
 var intv;
 var canvas,bcanvas,ctx,bctx,cw,ch;
+var mouseX=0, mouseY=0, mouseD=false, sz=3;
 function load() {
 	//set up output canvas
 	canvas = ge("output");
@@ -171,6 +172,53 @@ function load() {
 	
 	//start game loop
 	intv = setInterval(simuStep,16);
+	
+	ge("output").addEventListener("mousemove",eMm,false);
+	ge("output").addEventListener("mousedown",eMd,false);
+	ge("output").addEventListener("mouseup",eMu,false);
+}
+
+function eMm(event) {
+	event.preventDefault();
+	var tx=mouseX,ty=mouseY;
+	setmp(event);
+	drawParticles(tx,ty,mouseX,mouseY);
+}
+
+function eMd(event) {
+	event.preventDefault();
+	mouseD = true;
+	var tx=mouseX,ty=mouseY;
+	setmp(event);
+	drawParticles(tx,ty,mouseX,mouseY);
+}
+
+function eMu(event) {
+	event.preventDefault();
+	mouseD = false;
+	var tx=mouseX,ty=mouseY;
+	setmp(event);
+	drawParticles(tx,ty,mouseX,mouseY);
+}
+
+function setmp(event) {
+	mouseX = Math.floor((event.pageX-ge("output").offsetLeft)*(gw/cw));
+	mouseY = Math.floor((event.pageY-ge("output").offsetTop)*(gh/ch));
+}
+
+function drawParticles(x1,y1,x2,y2) {
+	if (mouseD) {
+		doLine(x1,y1,x2,y2, function(x,y){
+			for (var xx=x-sz; xx<x+sz; xx++) {
+				for (var yy=y-sz; yy<y+sz; yy++) {
+					if (inbounds(xx,yy)) {
+						np(xx,yy);
+						spp(xx,yy,0,SAND);
+					}
+				}
+			}
+		});
+	}
 }
 
 function redraw() {
@@ -198,6 +246,23 @@ for (var i=0; i<rands.length; i++) {
 function fastRand() {
 	if (randcnt>=rands.length) {randcnt=0;}
 	return rands[randcnt++];
+}
+
+function doLine(x0, y0, x1, y1, callback){
+   var dx = Math.abs(x1-x0);
+   var dy = Math.abs(y1-y0);
+   var sx = (x0 < x1) ? 1 : -1;
+   var sy = (y0 < y1) ? 1 : -1;
+   var err = dx-dy;
+
+   while(true){
+     callback(x0,y0);  // Do what you need to for this
+
+     if ((x0==x1) && (y0==y1)) break;
+     var e2 = 2*err;
+     if (e2 >-dy){ err -= dy; x0  += sx; }
+     if (e2 < dx){ err += dx; y0  += sy; }
+   }
 }
 
 function ge(s) {return document.getElementById(s);}
