@@ -17,13 +17,15 @@ props[SAND] = {
 	ignore: false,
 	color: [255,235,20],
 	gravity: 1,
-	slippery: 1
+	slippery: 1,
+	jitter: 0
 };
 props[WATER] = {
 	ignore: false,
 	color: [70,120,255],
 	gravity: 2,
-	slippery: 2
+	slippery: 2,
+	jitter: 1
 };
 
 
@@ -38,6 +40,9 @@ function gpi(x,y) {return (y*gw)+x;} //get particle index
 function spp(x,y,prop,val) {particles[(y*gw)+x][prop] = val;} //set particle property
 function gpp(x,y,prop) {return particles[(y*gw)+x][prop];} //get particle property
 
+function inbounds(x,y) {return x>=0 && y>=0 && x<gw && y<gh;}
+function free(x,y) {return inbounds(x,y) && gpp(x,y,0)==AIR;}
+
 function np(x,y) {
 	npi(gpi(x,y));
 }
@@ -51,14 +56,37 @@ function mpt(x,y,x2,y2) { //move particle to new position
 	particles[gpi(x2,y2)]=particles[gpi(x,y)];
 	np(x,y);
 } 
+function mpm(x,y,x2,y2) { //move particle as far as possible to x2 and y2 (in straight line motion)
+						  //returns final position as [x,y]
+	var sx = x2-x>=0?1:-1;
+	var sy = y2-y>=0?1:-1;
+	
+	var fx=x,fy=y;
+	for (var xm=x2-x; xm!=0; xm-=sx) {
+		if (x+xm>=0 && x+xm<gw && gpp(x+xm,y,0)==AIR) {
+			fx = x+xm;
+			break;
+		}
+	}
+	for (var ym=y2-y; ym!=0; ym-=sy) {
+		if (y+ym>=0 && y+ym<gh && gpp(fx,y+ym,0)==AIR) {
+			fy = y+ym;
+			break;
+		}
+	}
+	
+	mpt(x,y,fx,fy);
+	
+	return [fx,fy];
+}
 
 function simuStep() {
-	for (var i=0; i<5; i++) {
+	/*for (var i=0; i<5; i++) {
 		var x = Math.floor(Math.random()*gw);
 		var y = Math.floor(Math.random()*gh/5)+2;
 		np(x,y);
 		spp(x,y,0,Math.random()>0.5?WATER:SAND);
-	}
+	}*/
 	
 	for (var x=0; x<gw; x++) {
 		for (var y=0; y<gh; y++) {
@@ -76,18 +104,46 @@ function simuStep() {
 				var xx = x;
 				var yy = y;
 				
+				var moveddown = false;
 				for (var gr=pp.gravity; gr>0; gr--) {
 					try {
-						if (yy+gr<gh && gpp(x,y+gr,0)==AIR) { //apply gravity
+						if (yy+gr<gh && free(x,y+gr)) { //apply gravity
 							var yyy = yy+gr;
 							mpt(xx,yy,xx,yyy);
 							yy = yyy;
+							moveddown = true;
 							break;
 						}
 					}
 					catch (e) {console.log(y+gr+" "+gh)};
 				}
 				
+				if (!moveddown) {
+					if (free(xx-1,yy+1) && free(xx+1,yy+1)) {
+						var r = fastRand()>0.5?1:-1;
+						mpt(xx,yy,xx+r,yy+1);
+						xx+=r;
+						yy+=1;
+					}
+					else if (free(xx-1,yy+1)) {
+						mpt(xx,yy,xx-1,yy+1);
+						xx--;
+						yy++;
+					}
+					else if (free(xx+1,yy+1)) {
+						mpt(xx,yy,xx+1,yy+1);
+						xx++;
+						yy++;
+					}
+				}
+				
+				if (pp.jitter>0) {
+					var xm = Math.ceil(fastRand()*pp.jitter)*fastRand()>0.5?1:-1;
+					if (free(xx+xm,yy)) {
+						mpt(xx,yy,xx+xm,yy);
+						xx = xx+xm;
+					}
+				}
 			}
 		}
 	}
@@ -133,6 +189,15 @@ function redraw() {
 	}
 	bctx.putImageData(imgdata,0,0);
 	ctx.drawImage(bcanvas,0,0,cw,ch);
+}
+
+var rands = new Float32Array(10000), randcnt=0;
+for (var i=0; i<rands.length; i++) {
+	rands[i] = Math.random();
+}
+function fastRand() {
+	if (randcnt>=rands.length) {randcnt=0;}
+	return rands[randcnt++];
 }
 
 function ge(s) {return document.getElementById(s);}
