@@ -17,14 +17,16 @@ props[AIR] = {
 props[SAND] = {
 	ignore: false,
 	color: [255,235,20],
-	gravity: 2,
+	gravity: 1,
+	termvel: 4,
 	slippery: 1,
 	jitter: 0
 };
 props[WATER] = {
 	ignore: false,
 	color: [70,120,255],
-	gravity: 2,
+	gravity: 1,
+	termvel: 5,
 	slippery: 2,
 	jitter: 1
 };
@@ -36,6 +38,7 @@ props[STEAM] = {
 	ignore: false,
 	color: [200,200,200],
 	gravity: -1,
+	termvel: 10,
 	slippery: 2,
 	jitter: 1,
 	decaychance: 0.05
@@ -62,6 +65,7 @@ function npi(i) { //make a new particle at index
 	particles[i] = []//new Uint8Array(3);
 	particles[i][0] = AIR; //material
 	particles[i][1] = 0; //has been processed
+	particles[i][2] = 0; //vertical velocity
 }
 
 function mpt(x,y,x2,y2) { //move particle to new position
@@ -116,9 +120,14 @@ function simuStep() {
 				var xx = x;
 				var yy = y;
 				
+				var grav = gpp(xx,yy,2);
+				if (Math.abs(grav+pp.gravity)<=Math.abs(pp.termvel)) { //enforce terminal velocity
+					spp(xx,yy,2,grav+pp.gravity); //increase vspeed based on gravity
+				}
+				
 				var moveddown = false;
-				var ig = pp.gravity<0?1:-1;
-				for (var gr=pp.gravity; gr!=0; gr+=ig) {
+				var ig = gpp(xx,yy,2)<0?1:-1;
+				for (var gr=gpp(xx,yy,2); gr!=0; gr+=ig) {
 					//try {
 						if (yy+gr<gh && free(x,y+gr)) { //apply gravity
 							var yyy = yy+gr;
@@ -132,22 +141,7 @@ function simuStep() {
 				}
 				
 				if (!moveddown) {
-					/*if (free(xx-1,yy+1) && free(xx+1,yy+1)) {
-						var r = fastRand()>0.5?1:-1;
-						mpt(xx,yy,xx+r,yy+1);
-						xx+=r;
-						yy+=1;
-					}
-					else if (free(xx-1,yy+1)) {
-						mpt(xx,yy,xx-1,yy+1);
-						xx--;
-						yy++;
-					}
-					else if (free(xx+1,yy+1)) {
-						mpt(xx,yy,xx+1,yy+1);
-						xx++;
-						yy++;
-					}*/
+					spp(xx,yy,2,0); //reset vertical speed upon collision
 					var d = fastRand()>0.5?1:-1;
 					if (free(xx+d,yy+1)) {
 						mpt(xx,yy,xx+d,yy+1);
@@ -183,7 +177,7 @@ var canvas,bcanvas,ctx,bctx,cw,ch;
 var mouseX=0, mouseY=0, mouseD=false;
 var brushElement=SAND, brushSize=2;
 
-var tooltip = "Welcome to 5and!", tttimeout=1500, ttt = Date.now();
+var tooltip = "Welcome to 5and!", tttimeout=1500, ttt = Date.now(), ttcol=[25,255,25];
 function showTooltip() {ttt = Date.now();}
 
 function load() {
@@ -208,7 +202,7 @@ function load() {
 	ge("output").addEventListener("mousemove",eMm,false);
 	ge("output").addEventListener("mousedown",eMd,false);
 	ge("output").addEventListener("mouseup",eMu,false);
-	ge("output").addEventListener("mousewheel",eMw,false);
+	ge("output").addEventListener((/Firefox/i.test(navigator.userAgent))? "DOMMouseScroll" : "mousewheel",eMw,false);
 }
 
 function eMm(event) {
@@ -243,6 +237,7 @@ function eMw(event) {
 	
 	brushElement = brushElement+d>=eStrings.length?0:brushElement+d<0?eStrings.length-1:brushElement+d;
 	tooltip = eStrings[brushElement];
+	ttcol = props[brushElement].color;
 	showTooltip();
 }
 
@@ -283,6 +278,8 @@ function redraw() {
 	bctx.putImageData(imgdata,0,0);
 	
 	bctx.fillStyle = "rgba(255,255,255,"+(1-((Date.now()-ttt)/tttimeout))+")";
+	bctx.fillText(tooltip,mouseX+11,mouseY+11);
+	bctx.fillStyle = "rgba("+ttcol[0]+","+ttcol[1]+","+ttcol[2]+","+(1-((Date.now()-ttt)/tttimeout))+")";
 	bctx.fillText(tooltip,mouseX+10,mouseY+10);
 	
 	ctx.drawImage(bcanvas,0,0,cw,ch);
